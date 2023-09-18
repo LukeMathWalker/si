@@ -158,6 +158,12 @@ impl<'a> SiPkgSchemaVariant<'a> {
         SchemaVariantChildNode::SiPropFuncs,
         SiPkgSiPropFunc
     );
+    impl_variant_children_from_graph!(secrets, SchemaVariantChildNode::Secrets, SiPkgProp);
+    impl_variant_children_from_graph!(
+        secret_definitions,
+        SchemaVariantChildNode::SecretDefinition,
+        SiPkgProp
+    );
 
     fn prop_stack_from_source<I>(
         source: Source<'a>,
@@ -216,6 +222,16 @@ impl<'a> SiPkgSchemaVariant<'a> {
                         node,
                         PkgNode::SchemaVariantChild(SchemaVariantChildNode::ResourceValue)
                     ),
+                    SchemaVariantSpecPropRoot::Secrets => matches!(
+                        node,
+                        PkgNode::SchemaVariantChild(SchemaVariantChildNode::Secrets)
+                    ),
+                    SchemaVariantSpecPropRoot::SecretDefinition => {
+                        matches!(
+                            node,
+                            PkgNode::SchemaVariantChild(SchemaVariantChildNode::SecretDefinition)
+                        )
+                    }
                 }
             })
             .ok_or(SiPkgError::SchemaVariantChildNotFound(
@@ -223,6 +239,10 @@ impl<'a> SiPkgSchemaVariant<'a> {
                     SchemaVariantSpecPropRoot::Domain => SchemaVariantChildNode::Domain,
                     SchemaVariantSpecPropRoot::ResourceValue => {
                         SchemaVariantChildNode::ResourceValue
+                    }
+                    SchemaVariantSpecPropRoot::Secrets => SchemaVariantChildNode::Secrets,
+                    SchemaVariantSpecPropRoot::SecretDefinition => {
+                        SchemaVariantChildNode::SecretDefinition
                     }
                 }
                 .kind_str(),

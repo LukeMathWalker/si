@@ -638,7 +638,7 @@ async fn create_schema_variant(
             ),
         },
         None => {
-            let (mut schema_variant, root_prop) =
+            let (mut schema_variant, _) =
                 SchemaVariant::new(ctx, *schema.id(), variant_spec.name()).await?;
 
             schema
@@ -654,16 +654,72 @@ async fn create_schema_variant(
                 schema_variant.set_color(ctx, color.to_owned()).await?;
             }
 
-            let (domain_attr_funcs, domain_default_values, map_key_funcs) = create_props(
+            let mut attr_funcs = vec![];
+            let mut default_values = vec![];
+            let mut map_key_funcs = vec![];
+
+            let (domain_attr_funcs, domain_default_values, domain_map_key_funcs) = create_props(
                 ctx,
                 &variant_spec,
                 SchemaVariantSpecPropRoot::Domain,
-                root_prop.domain_prop_id,
+                *schema_variant
+                    .find_prop(ctx, &["root", "domain"])
+                    .await?
+                    .id(),
                 *schema.id(),
                 *schema_variant.id(),
                 func_map,
             )
             .await?;
+
+            attr_funcs.extend(domain_attr_funcs);
+            default_values.extend(domain_default_values);
+            map_key_funcs.extend(domain_map_key_funcs);
+
+            if !variant_spec.secrets()?.is_empty() {
+                let (secret_attr_funcs, secret_default_values, secret_map_key_funcs) =
+                    create_props(
+                        ctx,
+                        &variant_spec,
+                        SchemaVariantSpecPropRoot::Secrets,
+                        *schema_variant
+                            .find_prop(ctx, &["root", "secrets"])
+                            .await?
+                            .id(),
+                        *schema.id(),
+                        *schema_variant.id(),
+                        func_map,
+                    )
+                    .await?;
+
+                attr_funcs.extend(secret_attr_funcs);
+                default_values.extend(secret_default_values);
+                map_key_funcs.extend(secret_map_key_funcs);
+            };
+
+            if !variant_spec.secret_definitions()?.is_empty() {
+                let secret_definition_prop_id = *Prop::new(
+                    ctx,
+                    "secret_definition",
+                    PropKind::Object,
+                    None,
+                    *schema_variant.id(),
+                    Some(*schema_variant.find_prop(ctx, &["root"]).await?.id()),
+                )
+                .await?
+                .id();
+
+                create_props(
+                    ctx,
+                    &variant_spec,
+                    SchemaVariantSpecPropRoot::SecretDefinition,
+                    secret_definition_prop_id,
+                    *schema.id(),
+                    *schema_variant.id(),
+                    func_map,
+                )
+                .await?;
+            }
 
             let (rv_attr_funcs, rv_default_values, rv_map_key_funcs) = match schema_variant
                 .find_prop(ctx, &["root", "resource_value"])
@@ -688,6 +744,10 @@ async fn create_schema_variant(
                 Err(err) => Err(err)?,
             };
 
+            attr_funcs.extend(rv_attr_funcs);
+            default_values.extend(rv_default_values);
+            map_key_funcs.extend(rv_map_key_funcs);
+
             schema_variant
                 .finalize(ctx, Some(variant_spec_data.component_type().into()))
                 .await?;
@@ -706,10 +766,7 @@ async fn create_schema_variant(
 
             // Default values must be set before attribute functions are configured so they don't
             // override the prototypes set there
-            for default_value_info in domain_default_values
-                .into_iter()
-                .chain(rv_default_values.into_iter())
-            {
+            for default_value_info in default_values {
                 set_default_value(ctx, default_value_info).await?;
             }
 
@@ -749,10 +806,7 @@ async fn create_schema_variant(
                 .await?;
             }
 
-            for attr_func in domain_attr_funcs
-                .into_iter()
-                .chain(rv_attr_funcs.into_iter())
-            {
+            for attr_func in attr_funcs {
                 create_attribute_function_for_prop(
                     ctx,
                     *schema_variant.id(),
@@ -763,10 +817,7 @@ async fn create_schema_variant(
                 .await?;
             }
 
-            for (key, map_key_func) in map_key_funcs
-                .into_iter()
-                .chain(rv_map_key_funcs.into_iter())
-            {
+            for (key, map_key_func) in map_key_funcs {
                 create_attribute_function_for_prop(
                     ctx,
                     *schema_variant.id(),
