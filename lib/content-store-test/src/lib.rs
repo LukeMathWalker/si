@@ -22,7 +22,7 @@
 )]
 
 use color_eyre::eyre::{Result, WrapErr};
-use content_store::{PgMigrationHelpers, PgStore};
+use content_store::{PgStore, PgStoreTools};
 use si_data_pg::{PgPool, PgPoolConfig};
 use telemetry::prelude::*;
 use uuid::Uuid;
@@ -83,7 +83,7 @@ impl PgTestMigrationClient {
 
     /// Perform migrations for the global content store test database.
     pub async fn migrate(&self) -> Result<()> {
-        Ok(PgMigrationHelpers::migrate(&self.pg_pool).await?)
+        Ok(PgStoreTools::migrate(&self.pg_pool).await?)
     }
 }
 

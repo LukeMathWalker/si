@@ -5,3 +5,4 @@
 
 mod content_store;
 mod rebaser;
+mod workspace_snapshot;

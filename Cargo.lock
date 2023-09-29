@@ -3913,6 +3913,7 @@ name = "rebaser-server"
 version = "0.1.0"
 dependencies = [
  "buck2-resources",
+ "content-store",
  "dal",
  "derive_builder",
  "nats-subscriber",

@@ -4,7 +4,6 @@ pub(crate) mod pg;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use si_data_pg::{PgError, PgPoolError};
-
 use thiserror::Error;
 
 use crate::hash::ContentHash;

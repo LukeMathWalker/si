@@ -1,6 +1,4 @@
-//! For all tests in this module, provide "SI_TEST_BUILTIN_SCHEMAS=none" as an environment variable.
-
-use content_store::ContentHash;
+use content_store::{ContentHash, LocalStore};
 use dal::change_set_pointer::ChangeSetPointer;
 use dal::workspace_snapshot::content_address::ContentAddress;
 use dal::workspace_snapshot::node_weight::NodeWeight;
@@ -21,7 +19,7 @@ async fn simple_rebase(ctx: &mut DalContext) {
         .await
         .expect("could not create change set");
     let base_change_set = &mut base_change_set;
-    let mut snapshot = WorkspaceSnapshot::initial(ctx, &base_change_set)
+    let mut snapshot = WorkspaceSnapshot::initial(ctx, &base_change_set, LocalStore::default())
         .await
         .expect("could not create workspace snapshot");
 

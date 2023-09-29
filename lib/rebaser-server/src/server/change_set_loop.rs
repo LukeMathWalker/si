@@ -1,3 +1,4 @@
+use content_store::PgStore;
 use dal::change_set_pointer::ChangeSetPointer;
 use dal::{DalContext, DalContextBuilder, Tenancy, Visibility, WorkspacePk, WorkspaceSnapshot};
 use rebaser_core::{ChangeSetMessage, ChangeSetReplyMessage};
@@ -98,7 +99,7 @@ async fn process_delivery(
     // NOTE(nick): the "work" begins below!
     // ------------------------------------
 
-    let to_rebase: WorkspaceSnapshot = WorkspaceSnapshot::find(
+    let to_rebase: WorkspaceSnapshot<PgStore> = WorkspaceSnapshot::find(
         ctx,
         message
             .workspace_snapshot_to_rebase_on_top_of_current_snapshot_being_pointed_at

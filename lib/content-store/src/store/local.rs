@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 
 /// A kind of content store that operates entirely in memory.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct LocalStore(HashMap<ContentHash, Vec<u8>>);
 
 #[async_trait::async_trait]

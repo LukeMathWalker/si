@@ -1,5 +1,3 @@
-//! For all tests in this file, provide "SI_TEST_BUILTIN_SCHEMAS=none" as an environment variable.
-
 use content_store::Store;
 use content_store_test::DalTestPgStore;
 use dal::component::ComponentKind;

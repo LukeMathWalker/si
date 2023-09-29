@@ -31,8 +31,8 @@ pub mod update;
 pub mod vector_clock;
 
 use chrono::{DateTime, Utc};
+use content_store::Store;
 use petgraph::prelude::*;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use si_data_pg::{PgError, PgRow};
 use telemetry::prelude::*;
@@ -55,6 +55,8 @@ const FIND_FOR_CHANGE_SET: &str =
 #[remain::sorted]
 #[derive(Error, Debug)]
 pub enum WorkspaceSnapshotError {
+    #[error("missing content store on workspace snapshot")]
+    MissingContentStore,
     #[error("monotonic error: {0}")]
     Monotonic(#[from] ulid::MonotonicError),
     #[error("NodeWeight error: {0}")]
@@ -77,16 +79,19 @@ pub type WorkspaceSnapshotResult<T> = Result<T, WorkspaceSnapshotError>;
 
 pk!(WorkspaceSnapshotId);
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WorkspaceSnapshot {
+#[derive(Debug)]
+pub struct WorkspaceSnapshot<T: Store + Clone> {
     id: WorkspaceSnapshotId,
     created_at: DateTime<Utc>,
     snapshot: Value,
-    #[serde(skip_serializing)]
     working_copy: Option<WorkspaceSnapshotGraph>,
+    store: Option<T>,
 }
 
-impl TryFrom<PgRow> for WorkspaceSnapshot {
+impl<T> TryFrom<PgRow> for WorkspaceSnapshot<T>
+where
+    T: Store + Clone,
+{
     type Error = WorkspaceSnapshotError;
 
     fn try_from(row: PgRow) -> Result<Self, Self::Error> {
@@ -95,17 +100,24 @@ impl TryFrom<PgRow> for WorkspaceSnapshot {
             created_at: row.try_get("created_at")?,
             snapshot: row.try_get("snapshot")?,
             working_copy: None,
+            store: None,
         })
     }
 }
 
-impl WorkspaceSnapshot {
+impl<T> WorkspaceSnapshot<T>
+where
+    T: Store + Clone,
+{
     pub async fn initial(
         ctx: &DalContext,
         change_set: &ChangeSetPointer,
+        store: T,
     ) -> WorkspaceSnapshotResult<Self> {
         let snapshot = WorkspaceSnapshotGraph::new(change_set)?;
-        Ok(Self::new_inner(ctx, snapshot).await?)
+        let mut object = Self::new_inner(ctx, snapshot).await?;
+        object.store = Some(store);
+        Ok(object)
     }
 
     pub async fn write(&mut self, ctx: &DalContext) -> WorkspaceSnapshotResult<()> {
@@ -152,6 +164,12 @@ impl WorkspaceSnapshot {
             .ok_or(WorkspaceSnapshotError::WorkspaceSnapshotGraphMissing)
     }
 
+    fn store(&self) -> WorkspaceSnapshotResult<T> {
+        self.store
+            .clone()
+            .ok_or(WorkspaceSnapshotError::MissingContentStore)
+    }
+
     fn snapshot(&self) -> WorkspaceSnapshotResult<WorkspaceSnapshotGraph> {
         Ok(serde_json::from_value(self.snapshot.clone())?)
     }
@@ -177,12 +195,25 @@ impl WorkspaceSnapshot {
         to_rebase_change_set: &ChangeSetPointer,
         onto_change_set: &ChangeSetPointer,
     ) -> WorkspaceSnapshotResult<(Vec<Conflict>, Vec<Update>)> {
-        let onto: WorkspaceSnapshot = Self::find_for_change_set(ctx, onto_change_set.id).await?;
+        let onto = Self::find_for_change_set(ctx, onto_change_set.id).await?;
         Ok(self.snapshot()?.detect_conflicts_and_updates(
             to_rebase_change_set,
             &onto.snapshot()?,
             onto_change_set,
         )?)
+    }
+
+    pub async fn attribute_value_view(
+        &mut self,
+        root_index: NodeIndex,
+    ) -> WorkspaceSnapshotResult<Value> {
+        let mut pulled_off_store = self.store()?;
+        let value = self
+            .working_copy()?
+            .attribute_value_view(&mut pulled_off_store, root_index)
+            .await?;
+        self.store = Some(pulled_off_store);
+        Ok(value)
     }
 
     #[instrument(skip_all)]
